@@ -56,14 +56,17 @@ spoke_ctx=(${c1ctx} ${c2ctx} ${c3ctx})
 all_ctx=(${hubctx} ${spoke_ctx[@]})
 
 kueue_manifest="https://github.com/kubernetes-sigs/kueue/releases/download/${KUEUE_VERSION}/manifests.yaml"
-jobset_manifest="https://github.com/kubernetes-sigs/jobset/releases/download/v0.7.1/manifests.yaml"
+jobset_manifest="https://github.com/kubernetes-sigs/jobset/releases/download/v0.13.0/manifests.yaml"
 mpi_operator_manifest="https://raw.githubusercontent.com/kubeflow/mpi-operator/master/deploy/v2beta1/mpi-operator.yaml"
 training_operator_kustomize="github.com/kubeflow/training-operator.git/manifests/overlays/standalone?ref=v1.9.3"
 trainer_controlplane_kustomize="https://github.com/kubeflow/trainer.git/manifests/overlays/manager?ref=v2.1.0"
 ray_operator_crd_manifest="github.com/ray-project/kuberay/ray-operator/config/crd?ref=v1.3.0"
 appwrapper_manifest="https://github.com/project-codeflare/appwrapper/releases/download/v1.1.2/install.yaml"
-# Kueue v0.20+ MultiKueue watches LeaderWorkerSets on worker clusters; keep in sync with sigs.k8s.io/lws in Kueue's go.mod
-lws_manifest="https://github.com/kubernetes-sigs/lws/releases/download/v0.10.0/manifests.yaml"
+# Kueue v0.20+ MultiKueue watches LeaderWorkerSets on worker clusters.
+lws_version="v1.0.0"
+lws_manifest="https://github.com/kubernetes-sigs/lws/releases/download/${lws_version}/manifests.yaml"
+# The hub (MultiKueue manager) only needs the LWS CRD, not the LWS controller.
+lws_crd_manifest="https://raw.githubusercontent.com/kubernetes-sigs/lws/${lws_version}/config/crd/bases/leaderworkerset.x-k8s.io_leaderworkersets.yaml"
 
 # Function to create kind clusters
 create_clusters() {
@@ -116,6 +119,9 @@ install_kueue() {
       sleep 5s # sleep 5 seconds for the kueue-webhook-service ready
       kubectl apply --server-side -f "$jobset_manifest" --context "$ctx"
   done
+
+  echo "Install LeaderWorkerSet CRD on hub $hubctx"
+  kubectl apply --server-side -f "$lws_crd_manifest" --context "$hubctx"
 
   for ctx in "${spoke_ctx[@]}"; do
       echo "Install Kubeflow MPI Operator, Training Operator, LeaderWorkerSet on $ctx"
