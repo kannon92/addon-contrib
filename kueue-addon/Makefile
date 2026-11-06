@@ -17,10 +17,10 @@ KUEUE_VERSION := $(shell grep 'sigs.k8s.io/kueue' go.mod | awk '{print $$2}')
 update: update-manifests
 .PHONY: update
 
-# update cluster-permission.yaml with latest rules from Kueue repository
+# update cluster-permission.yaml with rules from Kueue $(KUEUE_VERSION)
 update-manifests:
-	@echo "Updating cluster-permission.yaml with latest rules from Kueue repository..."
-	@python3 scripts/update-cluster-permission.py
+	@echo "Updating cluster-permission.yaml with rules from Kueue $(KUEUE_VERSION)..."
+	@KUEUE_VERSION=$(KUEUE_VERSION) python3 scripts/update-cluster-permission.py
 .PHONY: update-manifests
 
 # verify

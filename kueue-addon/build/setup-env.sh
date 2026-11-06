@@ -9,7 +9,7 @@ CLEAN=false
 E2E_MODE=false
 IMPERSONATION=false
 CLUSTERPROFILE=false
-KUEUE_VERSION="v0.16.0"
+KUEUE_VERSION="v0.20.5"
 while [[ $# -gt 0 ]]; do
   case $1 in
     --clean)
@@ -62,6 +62,8 @@ training_operator_kustomize="github.com/kubeflow/training-operator.git/manifests
 trainer_controlplane_kustomize="https://github.com/kubeflow/trainer.git/manifests/overlays/manager?ref=v2.1.0"
 ray_operator_crd_manifest="github.com/ray-project/kuberay/ray-operator/config/crd?ref=v1.3.0"
 appwrapper_manifest="https://github.com/project-codeflare/appwrapper/releases/download/v1.1.2/install.yaml"
+# Kueue v0.20+ MultiKueue watches LeaderWorkerSets on worker clusters; keep in sync with sigs.k8s.io/lws in Kueue's go.mod
+lws_manifest="https://github.com/kubernetes-sigs/lws/releases/download/v0.10.0/manifests.yaml"
 
 # Function to create kind clusters
 create_clusters() {
@@ -116,7 +118,8 @@ install_kueue() {
   done
 
   for ctx in "${spoke_ctx[@]}"; do
-      echo "Install Kubeflow MPI Operator, Training Operator on $ctx"
+      echo "Install Kubeflow MPI Operator, Training Operator, LeaderWorkerSet on $ctx"
+      kubectl apply --server-side -f "$lws_manifest" --context "$ctx" || true
       kubectl apply --server-side -f "$mpi_operator_manifest" --context "$ctx" || true
       kubectl apply --server-side -f "$appwrapper_manifest" --context "$ctx" || true
       kubectl apply --server-side -k "$training_operator_kustomize" --context "$ctx" || true
@@ -256,13 +259,15 @@ EOF
 install_kueue_addon() {
   echo "Install kueue-addon"
 
-  # Determine chart source
+  # Install the chart from this repo so the add-on matches the Kueue version
+  # installed above. The published ocm/kueue-addon chart can lag behind and
+  # miss RBAC rules newer Kueue releases need on the spoke clusters.
+  CHART_SOURCE="../charts/kueue-addon"
   if [[ "$E2E_MODE" == "true" ]]; then
-    CHART_SOURCE="../charts/kueue-addon"
     EXTRA_ARGS="--set image.tag=e2e"
   else
-    CHART_SOURCE="ocm/kueue-addon"
-    EXTRA_ARGS=""
+    # "latest" is published from main on every merge.
+    EXTRA_ARGS="--set image.tag=${KUEUE_ADDON_IMAGE_TAG:-latest}"
   fi
 
   # Add impersonation settings if enabled (legacy mode with impersonation)
