@@ -439,7 +439,9 @@ spec:
 
 **After:**
 
-Admins only need to add `AdmissionChecks` to the `ClusterQueue`. The controller automates `MultiKueueConfig` and `MultiKueueCluster` creation based on `Placement` decisions.
+Admins create the two `AdmissionChecks` and reference only the MultiKueue one from the `ClusterQueue`. The OCM controller automates `MultiKueueConfig` and `MultiKueueCluster` creation based on `Placement` decisions.
+
+> **Note:** Do not list the OCM placement check (`controllerName: open-cluster-management.io/placement`) in the `ClusterQueue`. It only maintains the `MultiKueueConfig` and never marks individual workloads as Ready. Since Kueue v0.20, MultiKueue waits for every non-MultiKueue admission check on a workload to be Ready before dispatching it, so listing the placement check there leaves workloads stuck in `Pending`. The OCM check keeps working as long as the `AdmissionCheck` object exists.
 
 ```yaml
 apiVersion: kueue.x-k8s.io/v1beta2
@@ -450,8 +452,7 @@ spec:
 ...
   admissionChecksStrategy:
     admissionChecks:
-    - name: multikueue-demo2
-    - name: multikueue-config-demo2
+    - name: multikueue-demo2   # only the MultiKueue check
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: AdmissionCheck
@@ -464,6 +465,8 @@ spec:
     kind: MultiKueueConfig
     name: multikueue-config-demo2
 ---
+# Not referenced by the ClusterQueue; it keeps MultiKueueConfig
+# "multikueue-config-demo2" in sync with Placement "multikueue-config-demo2".
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: AdmissionCheck
 metadata:
@@ -484,7 +487,7 @@ This automation greatly reduces manual effort and ensures that MultiKueue enviro
 1. When kueue-addon is installed, the secret generation controller creates `ManagedServiceAccount` and `ClusterPermission` resources for each cluster
 2. ManagedServiceAccount generates service account tokens on spoke clusters
 3. The secret copy controller watches for these tokens and copies them to secrets in the kueue namespace
-4. User configures the `ClusterQueue` with `AdmissionCheck` and creates the `AdmissionCheck` and `Placement` resources
+4. User creates the `AdmissionCheck` and `Placement` resources and configures the `ClusterQueue` with the MultiKueue `AdmissionCheck`
 5. OCM generates `PlacementDecision` when `Placement` is created
 6. The admission check controller watches for `AdmissionCheck` resources referencing OCM `Placement`
 7. The admission check controller watches the `PlacementDecision` and updates these clusters in the `MultiKueueConfig` resource
@@ -494,7 +497,7 @@ This automation greatly reduces manual effort and ensures that MultiKueue enviro
 #### ClusterProfile Mode Workflow
 1. OCM automatically creates `ClusterProfile` objects for managed clusters in managedclusterset bound to `kueue-system` namespace
 2. When kueue-addon is installed, the secret generation controller creates labeled `ManagedServiceAccount` and `ClusterPermission` resources for each cluster
-3. User configures the `ClusterQueue` with `AdmissionCheck` and creates the `AdmissionCheck` and `Placement` resources
+3. User creates the `AdmissionCheck` and `Placement` resources and configures the `ClusterQueue` with the MultiKueue `AdmissionCheck`
 4. OCM generates `PlacementDecision` when `Placement` is created
 5. The admission check controller watches for `AdmissionCheck` resources referencing OCM `Placement`
 6. The admission check controller watches the `PlacementDecision` and updates these clusters in the `MultiKueueConfig` resource
